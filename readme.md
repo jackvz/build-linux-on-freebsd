@@ -129,7 +129,6 @@ sudo chroot /jails/debian/ apt-get update
 sudo chroot /jails/debian/ apt-get install -y build-essential libncurses-dev libelf1 bison flex libssl-dev bc git
 sudo chroot /jails/debian/ apt-get install -y kfreebsd-headers-8.3-1 kfreebsd-kernel-headers util-linux util-linux-locales linux-base linux-source-3.2 linux-support-3.2.0-4
 sudo chroot /jails/debian/ apt-get install -y libgmp10 libmpfr4 libmpc2
-sudo chroot /jails/debian/ apt-get install -y ftp
 
 sudo umount /jails/debian/media/debian-7-kfreebsd-dvd1
 sudo umount /jails/debian/media/debian-7-kfreebsd-update-dvd1
