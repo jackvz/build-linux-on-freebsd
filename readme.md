@@ -8,6 +8,7 @@ The [Debian package manager `dpkg` is ported to FreeBSD as part of the `BusyBox`
 
 - [Scott William Beasley's Debian from Scratch](https://github.com/scottwilliambeasley/debian-from-scratch.git)
 - [Linux from Scratch](http://www.linuxfromscratch.org)
+- [Installing Debian GNU/kFreeBSD from a Unix/Linux System](https://www.debian.org/releases/wheezy/kfreebsd-amd64/apds02.html.en)
 
 ## Requirements
 
@@ -19,11 +20,9 @@ Install BusyBox and Debootstrap:
 sudo pkg install sysutils/busybox sysutils/debootstrap
 ```
 
-## Build
+## Build the Linux User Space
 
-### [BusyBox](https://busybox.net/)
-
-Create the user space part of the operating system:
+### Build the [BusyBox](https://busybox.net/) User Space
 
 ```sh
 sudo mkdir -p /jails/busybox
@@ -41,7 +40,7 @@ sudo cp -R /lib/* /jails/busybox/lib/
 sudo cp -R /libexec/* /jails/busybox/libexec/
 ```
 
-### [Debian](https://www.debian.org/)
+### Build the [Debian](https://www.debian.org/) User Space
 
 Get the Debian 7 with FreeBSD kernel installation media, and create the user space part of the operating system:
 
@@ -50,18 +49,64 @@ wget http://cdimage.debian.org/mirror/cdimage/archive/7.11.0/kfreebsd-amd64/iso-
 wget http://cdimage.debian.org/mirror/cdimage/archive/7.11.0/kfreebsd-amd64/iso-dvd/debian-update-7.11.0-kfreebsd-amd64-DVD-1.iso
 wget http://cdimage.debian.org/mirror/cdimage/archive/7.11.0/kfreebsd-amd64/iso-dvd/debian-update-7.11.0-kfreebsd-amd64-DVD-2.iso
 
+# Begin: Read from the installation media from FreeBSD
+
 sudo mkdir -p /jails/debian
 sudo mkdir /media/debian-7-kfreebsd-dvd1
 sudo mdconfig debian-7.11.0-kfreebsd-amd64-DVD-1.iso
 sudo mount -t cd9660 /dev/md0 /media/debian-7-kfreebsd-dvd1
+
 sudo debootstrap --arch=kfreebsd-amd64 wheezy /jails/debian file:///media/debian-7-kfreebsd-dvd1
+
 sudo umount /media/debian-7-kfreebsd-dvd1
 sudo rm -rf /media/debian-7-kfreebsd-dvd1
 sudo mdconfig -d -o force -u /dev/md0
+
+# End: Read from the installation media from FreeBSD
+
+# Begin: Read from the installation media from the Debian system
+
+sudo mkdir /jails/debian/media/debian-7-kfreebsd-dvd1
+sudo mkdir /jails/debian/media/debian-7-kfreebsd-update-dvd1
+sudo mkdir /jails/debian/media/debian-7-kfreebsd-update-dvd2
+sudo mdconfig debian-7.11.0-kfreebsd-amd64-DVD-1.iso
+sudo mdconfig debian-update-7.11.0-kfreebsd-amd64-DVD-1.iso
+sudo mdconfig debian-update-7.11.0-kfreebsd-amd64-DVD-2.iso
+sudo mount -t cd9660 /dev/md0 /jails/debian/media/debian-7-kfreebsd-dvd1
+sudo mount -t cd9660 /dev/md1 /jails/debian/media/debian-7-kfreebsd-update-dvd1
+sudo mount -t cd9660 /dev/md2 /jails/debian/media/debian-7-kfreebsd-update-dvd2
+
+sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-dvd1 wheezy main contrib" > /jails/debian/etc/apt/sources.list'
+sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-update-dvd1 wheezy main contrib non-free" >> /jails/debian/etc/apt/sources.list'
+sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-update-dvd2 wheezy main contrib non-free" >> /jails/debian/etc/apt/sources.list'
+
+sudo chroot /jails/debian/ apt-get update
+
+sudo sh -c 'echo "America/New_York" > /jails/debian/etc/timezone'
 sudo sh -c 'echo "en_US.UTF-8 UTF-8" > /jails/debian/etc/locale.gen'
+sudo sh -c 'echo LANG="en_US.UTF-8" > /jails/debian/etc/default/locale'
+sudo sh -c 'echo LANGUAGE="en_US:en" >> /jails/debian/etc/default/locale'
+sudo chroot /jails/debian/ sh -c 'apt-get install -y locales'
+sudo chroot /jails/debian/ sh -c 'dpkg-reconfigure --frontend=noninteractive tzdata'
+sudo chroot /jails/debian/ sh -c 'dpkg-reconfigure --frontend=noninteractive locales'
+
+sudo chroot /jails/debian/ apt-get install -y build-essential libncurses-dev libelf1 libelfg0 bison flex libssl-dev bc git
+sudo chroot /jails/debian/ apt-get install -y kfreebsd-headers-8.3-1 kfreebsd-kernel-headers util-linux util-linux-locales linux-base linux-source-3.2 linux-support-3.2.0-4
+sudo chroot /jails/debian/ apt-get install -y libgmp10 libmpfr4 libmpc2
+sudo chroot /jails/debian/ apt-get install -y acpi-support-base
+sudo chroot /jails/debian/ apt-get install -y gcc-multilib gcc-4.7-multilib libc0.1 bzip2 make g++ gcc
+
+sudo umount -f /jails/debian/media/debian-7-kfreebsd-dvd1
+sudo umount -f /jails/debian/media/debian-7-kfreebsd-update-dvd1
+sudo umount -f /jails/debian/media/debian-7-kfreebsd-update-dvd2
+sudo mdconfig -d -o force -u /dev/md0
+sudo mdconfig -d -o force -u /dev/md1
+sudo mdconfig -d -o force -u /dev/md2
+
+# End: Read from the installation media from the Debian system
 ```
 
-### Start the FreeBSD Jail Systems
+## Start the FreeBSD Jail Systems
 
 Move [the FreeBSD Jails configuration file](./jail.conf) in place and update it with your network interface identifier and with the IP addresses that you want to use, then enable and start the [FreeBSD Jail](https://docs.freebsd.org/en/books/handbook/jails/) service, and list all running systems:
 
@@ -75,9 +120,11 @@ sudo service jail start
 jls
 ```
 
-### Access the FreeBSD Jail Systems
+## Build the Linux Kernel
 
-#### Access the BusyBox Jail
+### Work with the BusyBox User Space
+
+Access the BusyBox Jail:
 
 ```sh
 sudo jexec busybox /bin/busybox ash
@@ -98,6 +145,8 @@ The user space part of a Linux operating system usually consists of:
 - [GNU Binutils](https://www.gnu.org/software/binutils)
 - The GNU Build System, including the [GNU Compiler Collection (GCC)](https://www.gnu.org/software/gcc/) and the [GNU Debugger (GDB)](https://www.sourceware.org/gdb/).
 
+[The Linux Foundation's Filesystem Hierarchy Standard](https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.pdf) defines the folder structure of Linux systems.
+
 ```sh
 # Do what you want to do in the system with a BusyBox user space, and then exit back out to FreeBSD
 # ...
@@ -107,73 +156,98 @@ The user space part of a Linux operating system usually consists of:
 exit
 ```
 
-#### Access the Debian Jail
+### Work with the Debian User Space
 
-Set up the Debian system's package manager to get binary packages from the installation media for Debian with the FreeBSD kernel, and get the packages required to build the Linux kernel:
-
-```sh
-sudo mkdir /jails/debian/media/debian-7-kfreebsd-dvd1
-sudo mkdir /jails/debian/media/debian-7-kfreebsd-update-dvd1
-sudo mkdir /jails/debian/media/debian-7-kfreebsd-update-dvd2
-sudo mdconfig debian-7.11.0-kfreebsd-amd64-DVD-1.iso
-sudo mdconfig debian-update-7.11.0-kfreebsd-amd64-DVD-1.iso
-sudo mdconfig debian-update-7.11.0-kfreebsd-amd64-DVD-2.iso
-sudo mount -t cd9660 /dev/md0 /jails/debian/media/debian-7-kfreebsd-dvd1
-sudo mount -t cd9660 /dev/md1 /jails/debian/media/debian-7-kfreebsd-update-dvd1
-sudo mount -t cd9660 /dev/md2 /jails/debian/media/debian-7-kfreebsd-update-dvd2
-
-sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-dvd1 wheezy main contrib" > /jails/debian/etc/apt/sources.list'
-sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-update-dvd1 wheezy main contrib non-free" >> /jails/debian/etc/apt/sources.list'
-sudo sh -c 'echo "deb [trusted=yes] file:///media/debian-7-kfreebsd-update-dvd2 wheezy main contrib non-free" >> /jails/debian/etc/apt/sources.list'
-sudo chroot /jails/debian/ apt-get update
-sudo chroot /jails/debian/ apt-get install -y build-essential libncurses-dev libelf1 bison flex libssl-dev bc git
-sudo chroot /jails/debian/ apt-get install -y kfreebsd-headers-8.3-1 kfreebsd-kernel-headers util-linux util-linux-locales linux-base linux-source-3.2 linux-support-3.2.0-4
-sudo chroot /jails/debian/ apt-get install -y libgmp10 libmpfr4 libmpc2
-
-sudo umount /jails/debian/media/debian-7-kfreebsd-dvd1
-sudo umount /jails/debian/media/debian-7-kfreebsd-update-dvd1
-sudo umount /jails/debian/media/debian-7-kfreebsd-update-dvd2
-sudo mdconfig -d -o force -u /dev/md0
-sudo mdconfig -d -o force -u /dev/md1
-sudo mdconfig -d -o force -u /dev/md2
-```
-
-Copy the example Linux kernel configuration:
+Copy [the example Linux kernel configuration file](./kernel.config) into the Debian system:
 
 ```sh
-sudo mkdir -p /jails/debian/home/Projects
-sudo cp kernel.config /jails/debian/home/Projects/.config
+sudo cp kernel.config /jails/debian/tmp/.config
 ```
 
-Access the Debian system, get the Linux Libre kernel sources, configure it, get and build a more recent version of [GCC](https://gcc.gnu.org/), and build and install the Linux Libre kernel:
+Access the Debian system:
 
 ```sh
 sudo jexec debian /bin/bash
 ```
 
+Get and build a more recent version of [GCC](https://gcc.gnu.org/). Note: This takes a while. See the [GCC Installation Configuration documentation](https://gcc.gnu.org/install/configure.html) for more details.
+
 ```sh
-cd /home/Projects
+export GCC_VERSION=7.1.0
+export GCC_GMP_VERSION=6.1.0
+export GCC_ISL_VERSION=0.16.1
+export GCC_MPC_VERSION=1.0.3
+export GCC_MPFR_VERSION=3.1.4
+cd /tmp
+
+wget http://gcc.gnu.org/pub/gcc/infrastructure/gmp-${GCC_GMP_VERSION}.tar.bz2
+tar -xvf gmp-${GCC_GMP_VERSION}.tar.bz2
+mkdir gmp-${GCC_GMP_VERSION}-build
+cd gmp-${GCC_GMP_VERSION}-build
+$PWD/../gmp-${GCC_GMP_VERSION}/configure
+make -j$(nproc) && make install
+cd ..
+
+wget http://gcc.gnu.org/pub/gcc/infrastructure/mpfr-${GCC_MPFR_VERSION}.tar.bz2
+tar -xvf mpfr-${GCC_MPFR_VERSION}.tar.bz2
+mkdir mpfr-${GCC_MPFR_VERSION}-build
+cd mpfr-${GCC_MPFR_VERSION}-build
+$PWD/../mpfr-${GCC_MPFR_VERSION}/configure
+make -j$(nproc) && make install
+cd ..
+
+wget http://gcc.gnu.org/pub/gcc/infrastructure/mpc-${GCC_MPC_VERSION}.tar.gz
+tar -xvf mpc-${GCC_MPC_VERSION}.tar.gz
+mkdir mpc-${GCC_MPC_VERSION}-build
+cd mpc-${GCC_MPC_VERSION}-build
+$PWD/../mpc-${GCC_MPC_VERSION}/configure
+make -j$(nproc) && make install
+cd ..
+
+wget http://gcc.gnu.org/pub/gcc/infrastructure/isl-${GCC_ISL_VERSION}.tar.bz2
+tar -xvf isl-${GCC_ISL_VERSION}.tar.bz2
+mkdir isl-${GCC_ISL_VERSION}-build
+cd isl-${GCC_ISL_VERSION}-build
+$PWD/../isl-${GCC_ISL_VERSION}/configure
+make -j$(nproc) && make install
+cd ..
+
+wget http://ftp.gnu.org/gnu/gcc/gcc-${GCC_VERSION}/gcc-${GCC_VERSION}.tar.bz2
+tar -xvf gcc-${GCC_VERSION}.tar.bz2
+mkdir gcc-${GCC_VERSION}-build
+cd gcc-${GCC_VERSION}-build
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+$PWD/../gcc-${GCC_VERSION}/configure \
+  --enable-languages=c,c++ \
+  --disable-bootstrap \
+  --disable-decimal-float \
+  --disable-libgomp \
+  --disable-libquadmath \
+  --disable-libssp \
+  --disable-libvtv \
+  --disable-lto \
+  --disable-multilib \
+  --disable-nls \
+  --disable-shared \
+  --disable-threads \
+  --disable-tls \
+  --with-gmp=/usr/local/lib \
+  --with-isl=/usr/local/lib \
+  --with-mpc=/usr/local/lib \
+  --with-mpfr=/usr/local/lib
+make -j$(nproc)
+make install
+cd ..
 
 # @todo:
 # git clone -b main --single-branch https://github.com/jackvz/gcc.git
 # cd gcc
-# ./configure \
-#   --disable-shared \
-#   --disable-bootstrap \
-#   --disable-libstdcxx-pch \
-#   --enable-languages=all \
-#   --enable-libgomp \
-#   --enable-lto \
-#   --enable-threads=posix \
-#   --enable-tls \
-#   --with-gmp=/tmp/gcc \
-#   --with-mpfr=/usr/lib/x86_64-kfreebsd-gnu \
-#   --with-mpc=/usr/lib/x86_64-kfreebsd-gnu \
-#   --with-libelf=/tmp/gcc \
-#   --with-fpmath=sse
-# make && make install
-# cd ..
+```
 
+Get the Linux Libre kernel source and build the kernel:
+
+```sh
+cd /tmp
 git clone -b main --single-branch https://github.com/jackvz/linux-libre.git
 cp .config ./linux-libre/.config
 cd linux-libre
@@ -187,19 +261,14 @@ make install
 exit
 ```
 
-### Stop the and Clear Out the Jails
+## Stop and Remove the FreeBSD Jails
 
-Stop all running [FreeBSD Jail](https://docs.freebsd.org/en/books/handbook/jails/) systems and disable the service:
+Stop all running [FreeBSD Jail](https://docs.freebsd.org/en/books/handbook/jails/) systems, disable the service, and remove the systems:
 
 ```sh
 sudo service jail stop
 sudo sysrc jail_enable="NO"
 jls
-```
-
-Remove the Jails:
-
-```sh
 sudo rm -rf /jails/busybox
 sudo rm -rf /jails/debian
 ```
